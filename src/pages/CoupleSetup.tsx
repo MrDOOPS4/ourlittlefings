@@ -35,7 +35,7 @@ export default function CoupleSetup({ onReady }: { onReady: (coupleId: string) =
       const { error: mErr } = await supabase
         .from("couple_members")
         .insert({ couple_id: couple.id, user_id: user.id });
-      if (mErr) throw mErr;
+        if (mErr) throw mErr;
 
       setMyCode(couple.code);
       localStorage.setItem("olf.couple_id", couple.id);

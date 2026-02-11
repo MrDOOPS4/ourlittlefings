@@ -7,11 +7,13 @@ export default function Auth() {
   const [err, setErr] = useState<string | null>(null);
 
   const sendLink = async () => {
-    setErr(null);
     await supabase.auth.signInWithOtp({
         email,
-        options: { emailRedirectTo: window.location.origin },
+        options: {
+          emailRedirectTo: window.location.origin
+        }
       });
+      
   };
 
   return (
