@@ -10,13 +10,13 @@ const Valentine = () => {
     "No 😢",
     "Are you sure?",
     "Really sure?",
-    "Think again!",
-    "Pleeeease? 🥺",
-    "I'll be sad 😭",
+    "Ill buy you an ice cream?",
+    "Pleeeease?",
+    "I'll be sad baby",
     "Pretty please?",
     "With a cherry on top?",
-    "You're breaking my heart 💔",
-    "FINAL ANSWER?!",
+    "You're breaking my heart",
+    "Not taking no for an answer",
   ];
 
   const handleNo = () => {
@@ -42,9 +42,9 @@ const Valentine = () => {
               />
             ))}
           </div>
-          <h1 className="text-5xl md:text-7xl font-display font-semibold mb-4">Yaaay! 🥰</h1>
+          <h1 className="text-5xl md:text-7xl font-display font-semibold mb-4">Yaaay babbyyyyy</h1>
           <p className="text-xl text-muted-foreground font-body italic">
-            I knew you'd say yes! Happy Valentine's Day, Tallulah! ♡
+            Thank you for being my valentine baby ♡ (you didnt have a choice though 😏)
           </p>
         </div>
       </div>
@@ -59,7 +59,7 @@ const Valentine = () => {
           Will you be my Valentine?
         </h1>
         <p className="text-muted-foreground font-body italic mb-10">
-          Tallulah, you already know the right answer... 😏
+          You can say no but I don't think you will
         </p>
         <div className="flex items-center justify-center gap-4 relative">
           <button

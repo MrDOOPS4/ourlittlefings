@@ -40,7 +40,7 @@ const Index = () => {
 
       {/* Footer */}
       <footer className="text-center py-6 text-sm text-muted-foreground font-body">
-        made with love ♡
+        made with all my love for you baby ♡
       </footer>
     </div>
   );
