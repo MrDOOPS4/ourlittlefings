@@ -11,7 +11,6 @@ export default function CoupleSetup({ onReady }: { onReady: (coupleId: string) =
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // If already saved on device, use it
   useEffect(() => {
     const saved = localStorage.getItem("olf.couple_id");
     if (saved) onReady(saved);
@@ -21,21 +20,15 @@ export default function CoupleSetup({ onReady }: { onReady: (coupleId: string) =
     setErr(null);
     setLoading(true);
     try {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error("Not logged in");
-
       const newCode = makeCode();
+
       const { data: couple, error } = await supabase
         .from("couples")
         .insert({ code: newCode })
         .select()
         .single();
-      if (error) throw error;
 
-      const { error: mErr } = await supabase
-        .from("couple_members")
-        .insert({ couple_id: couple.id, user_id: user.id });
-        if (mErr) throw mErr;
+      if (error) throw error;
 
       setMyCode(couple.code);
       localStorage.setItem("olf.couple_id", couple.id);
@@ -51,25 +44,18 @@ export default function CoupleSetup({ onReady }: { onReady: (coupleId: string) =
     setErr(null);
     setLoading(true);
     try {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (!user) throw new Error("Not logged in");
-
       const { data: couple, error } = await supabase
         .from("couples")
         .select("*")
-        .eq("code", code.toUpperCase())
+        .eq("code", code.toUpperCase().trim())
         .single();
-      if (error) throw error;
 
-      const { error: mErr } = await supabase
-        .from("couple_members")
-        .insert({ couple_id: couple.id, user_id: user.id });
-      if (mErr) throw mErr;
+      if (error) throw error;
 
       localStorage.setItem("olf.couple_id", couple.id);
       onReady(couple.id);
     } catch (e: any) {
-      setErr(e.message ?? "Failed");
+      setErr("Invalid code (or couple not found).");
     } finally {
       setLoading(false);
     }
@@ -79,11 +65,9 @@ export default function CoupleSetup({ onReady }: { onReady: (coupleId: string) =
     <div style={{ maxWidth: 520, margin: "40px auto", padding: 16 }}>
       <h1>Link your phones</h1>
 
-      <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
-        <button onClick={createCouple} disabled={loading} style={{ padding: 10, flex: 1 }}>
-          Create couple code
-        </button>
-      </div>
+      <button onClick={createCouple} disabled={loading} style={{ padding: 10, width: "100%", marginTop: 12 }}>
+        {loading ? "Creating..." : "Create couple code"}
+      </button>
 
       {myCode && (
         <p style={{ marginTop: 12 }}>
@@ -100,8 +84,12 @@ export default function CoupleSetup({ onReady }: { onReady: (coupleId: string) =
         placeholder="Enter code e.g. A1B2C3"
         style={{ width: "100%", padding: 10, marginTop: 8 }}
       />
-      <button onClick={joinCouple} disabled={loading || !code} style={{ marginTop: 12, padding: 10, width: "100%" }}>
-        Join
+      <button
+        onClick={joinCouple}
+        disabled={loading || !code.trim()}
+        style={{ padding: 10, width: "100%", marginTop: 12 }}
+      >
+        {loading ? "Joining..." : "Join"}
       </button>
 
       {err && <p style={{ marginTop: 12, color: "crimson" }}>{err}</p>}

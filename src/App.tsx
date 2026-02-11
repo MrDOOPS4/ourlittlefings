@@ -12,48 +12,19 @@ import Valentine from "./pages/Valentine";
 import DateBuilder from "./pages/DateBuilder";
 import NotFound from "./pages/NotFound";
 
-import Auth from "./pages/Auth";
 import CoupleSetup from "./pages/CoupleSetup";
-
-import { supabase } from "@/lib/supabase";
 
 const queryClient = new QueryClient();
 
 const App = () => {
-  const [session, setSession] = useState<any>(null);
   const [coupleId, setCoupleId] = useState<string | null>(null);
 
-  // Keep session in sync (magic-link login will land back here)
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => sub.subscription.unsubscribe();
-  }, []);
-
-  // Load coupleId from localStorage (this is OK — only the ID is stored locally; data is in Supabase)
   useEffect(() => {
     const saved = localStorage.getItem("olf.couple_id");
     if (saved) setCoupleId(saved);
   }, []);
 
-  // 1) Must be logged in (RLS depends on auth)
-  if (!session) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <Auth />
-        </TooltipProvider>
-      </QueryClientProvider>
-    );
-  }
-
-  // 2) Must have a couple space (shared between you and partner)
+  // Require couple link before using the app
   if (!coupleId) {
     return (
       <QueryClientProvider client={queryClient}>
@@ -71,7 +42,6 @@ const App = () => {
     );
   }
 
-  // 3) Normal app
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -80,7 +50,6 @@ const App = () => {
         <BrowserRouter>
           <Navbar />
           <Routes>
-            {/* Pass coupleId to pages that need shared storage */}
             <Route path="/" element={<Index />} />
             <Route path="/memories" element={<Memories coupleId={coupleId} />} />
             <Route path="/valentine" element={<Valentine />} />
