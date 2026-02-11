@@ -1,47 +1,174 @@
-import { useState } from "react";
-import { Heart, Plus, X, Image as ImageIcon } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, X, Image as ImageIcon, Trash2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
-interface Memory {
+type MemoryRow = {
   id: string;
-  src: string;
+  couple_id: string;
   caption: string;
+  image_path: string | null;
+  created_at: string;
+};
+
+type MemoryUI = {
+  id: string;
+  caption: string;
+  imageUrl: string | null;
+  imagePath: string | null;
+  createdAt: string;
+};
+
+function publicUrlForPath(path: string) {
+  const { data } = supabase.storage.from("memories").getPublicUrl(path);
+  return data.publicUrl;
 }
 
-const placeholderMemories: Memory[] = [
-  { id: "1", src: "", caption: "Our first adventure together 💕" },
-  { id: "2", src: "", caption: "That perfect sunset 🌅" },
-  { id: "3", src: "", caption: "Laughing until it hurt 😂" },
-  { id: "4", src: "", caption: "The cozy rainy day ☔" },
-];
-
-const Memories = () => {
-  const [memories, setMemories] = useState<Memory[]>(placeholderMemories);
+const Memories = ({ coupleId }: { coupleId: string }) => {
+  const [memories, setMemories] = useState<MemoryUI[]>([]);
+  const [loading, setLoading] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
-  const [newCaption, setNewCaption] = useState("");
-  const [newImage, setNewImage] = useState<string>("");
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setNewImage(reader.result as string);
-      reader.readAsDataURL(file);
+  const [newCaption, setNewCaption] = useState("");
+  const [newFile, setNewFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string>("");
+
+  const [err, setErr] = useState<string | null>(null);
+
+  // cleanup preview object URL
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  const canSave = useMemo(() => {
+    return Boolean(newCaption.trim() || newFile);
+  }, [newCaption, newFile]);
+
+  const loadMemories = async () => {
+    setErr(null);
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("memories")
+        .select("id,couple_id,caption,image_path,created_at")
+        .eq("couple_id", coupleId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      const rows = (data ?? []) as MemoryRow[];
+      const mapped: MemoryUI[] = rows.map((r) => ({
+        id: r.id,
+        caption: r.caption ?? "",
+        imagePath: r.image_path,
+        imageUrl: r.image_path ? publicUrlForPath(r.image_path) : null,
+        createdAt: r.created_at,
+      }));
+
+      setMemories(mapped);
+    } catch (e: any) {
+      setErr(e.message ?? "Failed to load memories");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const addMemory = () => {
-    if (!newCaption && !newImage) return;
-    setMemories((prev) => [
-      { id: Date.now().toString(), src: newImage, caption: newCaption || "A lovely memory ♡" },
-      ...prev,
-    ]);
-    setNewCaption("");
-    setNewImage("");
-    setShowAdd(false);
+  useEffect(() => {
+    loadMemories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coupleId]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    setNewFile(file);
+
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(file ? URL.createObjectURL(file) : "");
   };
 
-  const removeMemory = (id: string) => {
-    setMemories((prev) => prev.filter((m) => m.id !== id));
+  const addMemory = async () => {
+    if (!canSave) return;
+
+    setErr(null);
+    setLoading(true);
+
+    try {
+      let imagePath: string | null = null;
+
+      // 1) upload image to storage (optional)
+      if (newFile) {
+        const ext = newFile.name.split(".").pop() || "jpg";
+        const fileName = `${crypto.randomUUID()}.${ext}`;
+        imagePath = `${coupleId}/${fileName}`;
+
+        const { error: upErr } = await supabase.storage
+          .from("memories")
+          .upload(imagePath, newFile, { upsert: false });
+
+        if (upErr) throw upErr;
+      }
+
+      // 2) insert row
+      const captionToSave = newCaption.trim() || "A lovely memory ♡";
+
+      const { data, error } = await supabase
+        .from("memories")
+        .insert({
+          couple_id: coupleId,
+          caption: captionToSave,
+          image_path: imagePath,
+        })
+        .select("id,couple_id,caption,image_path,created_at")
+        .single();
+
+      if (error) throw error;
+
+      const row = data as MemoryRow;
+
+      // 3) update UI immediately
+      const uiRow: MemoryUI = {
+        id: row.id,
+        caption: row.caption,
+        imagePath: row.image_path,
+        imageUrl: row.image_path ? publicUrlForPath(row.image_path) : null,
+        createdAt: row.created_at,
+      };
+
+      setMemories((prev) => [uiRow, ...prev]);
+
+      // reset form
+      setNewCaption("");
+      setNewFile(null);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl("");
+      setShowAdd(false);
+    } catch (e: any) {
+      setErr(e.message ?? "Failed to save memory");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const removeMemory = async (m: MemoryUI) => {
+    setErr(null);
+    setLoading(true);
+    try {
+      // delete db row first
+      const { error } = await supabase.from("memories").delete().eq("id", m.id);
+      if (error) throw error;
+
+      // best-effort delete storage object (if exists)
+      if (m.imagePath) {
+        await supabase.storage.from("memories").remove([m.imagePath]);
+      }
+
+      setMemories((prev) => prev.filter((x) => x.id !== m.id));
+    } catch (e: any) {
+      setErr(e.message ?? "Failed to delete memory");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -51,6 +178,7 @@ const Memories = () => {
         <div className="text-center mb-12 animate-fade-in">
           <h1 className="text-4xl md:text-5xl font-display font-semibold mb-3">Our Memories</h1>
           <p className="text-muted-foreground italic">All the little moments that mean everything</p>
+          {err && <p className="mt-3 text-sm text-destructive">{err}</p>}
         </div>
 
         {/* Add button */}
@@ -71,8 +199,8 @@ const Memories = () => {
               <div>
                 <label className="block text-sm font-body text-muted-foreground mb-1.5">Photo</label>
                 <label className="flex items-center justify-center w-full h-32 rounded-lg border-2 border-dashed border-primary/30 cursor-pointer hover:border-primary/50 transition-colors overflow-hidden">
-                  {newImage ? (
-                    <img src={newImage} alt="Preview" className="w-full h-full object-cover" />
+                  {previewUrl ? (
+                    <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
                   ) : (
                     <div className="flex flex-col items-center text-muted-foreground">
                       <ImageIcon className="w-6 h-6 mb-1" />
@@ -82,6 +210,7 @@ const Memories = () => {
                   <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
                 </label>
               </div>
+
               <div>
                 <label className="block text-sm font-body text-muted-foreground mb-1.5">Caption</label>
                 <input
@@ -92,48 +221,56 @@ const Memories = () => {
                   className="w-full px-4 py-2 rounded-lg border bg-background text-foreground text-sm font-body placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
               </div>
+
               <button
                 onClick={addMemory}
-                className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-body hover:opacity-90 transition-opacity"
+                disabled={loading || !canSave}
+                className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-body hover:opacity-90 transition-opacity disabled:opacity-50"
               >
-                Save Memory ♡
+                {loading ? "Saving..." : "Save Memory ♡"}
               </button>
             </div>
           </div>
         )}
 
-        {/* Gallery Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {memories.map((memory, i) => (
-            <div
-              key={memory.id}
-              className="group relative rounded-2xl overflow-hidden bg-card border hover-float animate-fade-in"
-              style={{ animationDelay: `${i * 0.1}s` }}
-            >
-              <div className="aspect-[4/3] bg-accent/30 flex items-center justify-center overflow-hidden">
-                {memory.src ? (
-                  <img src={memory.src} alt={memory.caption} className="w-full h-full object-cover" />
-                ) : (
-                  <Heart className="w-10 h-10 text-primary/30 fill-primary/10" />
-                )}
-              </div>
-              <div className="p-4">
-                <p className="text-sm font-body text-foreground">{memory.caption}</p>
-              </div>
-              <button
-                onClick={() => removeMemory(memory.id)}
-                className="absolute top-2 right-2 p-1.5 rounded-full bg-background/80 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive"
+        {loading && memories.length === 0 ? (
+          <div className="text-center text-muted-foreground">Loading…</div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {memories.map((m, i) => (
+              <div
+                key={m.id}
+                className="group relative rounded-2xl overflow-hidden bg-card border hover-float animate-fade-in"
+                style={{ animationDelay: `${i * 0.06}s` }}
               >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ))}
-        </div>
+                <button
+                  onClick={() => removeMemory(m)}
+                  className="absolute top-3 right-3 z-10 p-2 rounded-full bg-background/80 backdrop-blur opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Delete"
+                >
+                  <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
+                </button>
 
-        {memories.length === 0 && (
-          <div className="text-center py-20 text-muted-foreground">
-            <Heart className="w-12 h-12 mx-auto mb-4 text-primary/20" />
-            <p className="font-body italic">No memories yet... let's make some! ♡</p>
+                <div className="aspect-[4/3] bg-muted flex items-center justify-center">
+                  {m.imageUrl ? (
+                    <img src={m.imageUrl} alt={m.caption} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="text-muted-foreground text-sm">No photo</div>
+                  )}
+                </div>
+
+                <div className="p-4">
+                  <p className="text-sm font-body text-foreground/90">{m.caption}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {(!loading && memories.length === 0) && (
+          <div className="text-center py-20 text-muted-foreground font-body">
+            <p className="text-lg italic">No memories yet...</p>
+            <p className="text-sm mt-1">Add your first one above ♡</p>
           </div>
         )}
       </div>
