@@ -7,6 +7,7 @@ import Navbar from "./components/Navbar";
 import Index from "./pages/Index";
 import Memories from "./pages/Memories";
 import Valentine from "./pages/Valentine";
+import DateBuilder from "./pages/DateBuilder";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +23,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/memories" element={<Memories />} />
           <Route path="/valentine" element={<Valentine />} />
+          <Route path="/dates" element={<DateBuilder />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

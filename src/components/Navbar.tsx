@@ -4,6 +4,7 @@ import { Heart } from "lucide-react";
 const links = [
   { to: "/", label: "Home" },
   { to: "/memories", label: "Memories" },
+  { to: "/dates", label: "Dates" },
   { to: "/valentine", label: "Valentine" },
 ];
 
